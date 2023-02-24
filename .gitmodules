@@ -1,0 +1,3 @@
+[submodule "client/rewind-api-spec"]
+	path = client/rewind-api-spec
+	url = https://github.com/rewind-media/rewind-api-spec

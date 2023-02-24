@@ -1,0 +1,119 @@
+plugins {
+    id "org.openapi.generator" version "6.4.0"
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.8.0'
+}
+
+apply plugin: 'kotlin'
+var vertx_version = "4.3.3"
+dependencies {
+//vertx
+
+//    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$project.kotlin_version"
+//    implementation "org.jetbrains.kotlin:kotlin-reflect:$project.kotlin_version"
+//    implementation "com.squareup.moshi:moshi-kotlin:1.13.0"
+//    implementation "com.squareup.moshi:moshi-adapters:1.13.0"
+//    testImplementation "io.kotlintest:kotlintest-runner-junit5:3.4.2"
+//    implementation "io.vertx:vertx-web-client:$vertx_version"
+//    implementation "io.vertx:vertx-core:$vertx_version"
+//    implementation "io.vertx:vertx-lang-kotlin:$vertx_version"
+//    implementation "io.vertx:vertx-uri-template:$vertx_version"
+
+    // okhttp4
+//    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$project.kotlin_version"
+//    implementation "org.jetbrains.kotlin:kotlin-reflect:$project.kotlin_version"
+//    implementation "com.squareup.moshi:moshi-kotlin:1.13.0"
+//    implementation "com.squareup.moshi:moshi-adapters:1.13.0"
+//    implementation "com.squareup.okhttp3:okhttp:4.10.0"
+//    testImplementation "io.kotlintest:kotlintest-runner-junit5:3.4.2"
+
+    //ktor
+//    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$project.kotlin_version"
+//    implementation "org.jetbrains.kotlin:kotlin-reflect:$project.kotlin_version"
+//    implementation "com.squareup.moshi:moshi-kotlin:1.13.0"
+//    implementation "com.squareup.moshi:moshi-adapters:1.13.0"
+//    implementation "io.ktor:ktor-client-core:$project.ktor_version"
+//    implementation "io.ktor:ktor-client-content-negotiation:$project.ktor_version"
+//    testImplementation "io.kotlintest:kotlintest-runner-junit5:3.4.2"
+
+    // multiplatform
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$project.kotlin_version"
+    implementation "io.ktor:ktor-client-okhttp-jvm:$project.ktor_version"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$project.kotlinx_coroutines_version"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-core:$project.kotlinx_serialization_version"
+
+    implementation "io.ktor:ktor-client-core:$project.ktor_version"
+    implementation "io.ktor:ktor-client-serialization:$project.ktor_version"
+    implementation "io.ktor:ktor-client-content-negotiation:$project.ktor_version"
+    implementation "io.ktor:ktor-serialization-kotlinx-json:$project.ktor_version"
+}
+
+var generatedPath = "${buildDir}/open-api-generated"
+openApiGenerate {
+    generatorName = "kotlin"
+    inputSpec = "$projectDir/rewind-api-spec/src/openapi.yaml"
+    outputDir = generatedPath
+    apiPackage = "io.media.rewind.api"
+    modelPackage = "com.media.rewind.model"
+    configOptions = [
+//            library: "jvm-ktor"
+library: "multiplatform"
+//            library: "jvm-vertx"
+//            library: "jvm-okhttp4"
+    ]
+}
+
+task copySources(type: Copy) {
+    from generatedPath
+    into "$buildDir/generated-src"
+    // Don't ask me why - jsonBlock is just randomly added there.
+    filter { line ->
+        line
+//                .replaceAll(
+//                        'ApiClient\\(baseUrl, httpClientEngine, httpClientConfig, jsonBlock\\) \\{',
+//                        'ApiClient(baseUrl, httpClientEngine, httpClientConfig) {'
+//                )
+                .replaceAll( // ContentType being filtered from requests for some odd reason
+                        'protected val UNSAFE_HEADERS = listOf\\(HttpHeaders\\.ContentType\\)',
+                        'protected val UNSAFE_HEADERS = emptyList<String>()'
+                )
+                .replaceAll( // Actually set the content type for json requests
+                        'protected suspend fun \\<T: Any\\?\\> jsonRequest\\(requestConfig: RequestConfig\\<T\\>, body: Any\\? = null, authNames: kotlin.collections.List\\<String\\>\\): HttpResponse = request\\(requestConfig, body, authNames\\)',
+                        'protected suspend fun <T: Any?> jsonRequest(requestConfig: RequestConfig<T>, body: Any? = null, authNames: kotlin.collections.List<String>): HttpResponse = request(requestConfig.apply { headers[HttpHeaders.ContentType] = "application/json" }, body, authNames)'
+                )
+                .replaceAll( // Expose the HttpClient so that we can extract cookies from it and store them
+                        'private val client: HttpClient by lazy ',
+                        'val client: HttpClient by lazy '
+                )
+                .replaceAll( // Expose the baseUrl so that we can reference it easily
+                        'private val baseUrl: String',
+                        'val baseUrl: String'
+                )
+                .replaceAll( // TODO remove this and get gzip encoding working with empty responses
+                        'val headers = requestConfig.headers',
+                        'val headers = mapOf("Accept-Encoding" to "identity") + requestConfig.headers'
+                ).replaceAll(
+                '    HttpResponse\\(this, TypedBodyProvider\\(typeInfo<T>\\(\\)\\)\\)',
+                '''
+    when(T::class.java) {
+        Unit::class.java -> HttpResponse(this, UnitBodyProvider()) as HttpResponse<T>
+        else -> HttpResponse(this, TypedBodyProvider(typeInfo<T>()))
+    }
+    class UnitBodyProvider() : BodyProvider<Unit> {
+    @Suppress("UNCHECKED_CAST")
+    override suspend fun body(response: io.ktor.client.statement.HttpResponse): Unit = Unit
+
+    @Suppress("UNCHECKED_CAST")
+    override suspend fun <V : Any> typedBody(response: io.ktor.client.statement.HttpResponse, type: TypeInfo): V =
+        Unit as V
+}
+'''
+        )
+    }
+}
+
+sourceSets.main.kotlin.srcDirs += "$buildDir/generated-src/src/main/kotlin"
+
+tasks.openApiGenerate.dependsOn tasks.clean
+tasks.copySources.dependsOn tasks.openApiGenerate
+compileKotlin.dependsOn tasks.copySources
+processResources.dependsOn tasks.copySources

@@ -112,11 +112,11 @@ class MainViewModel(
                     episodeInfo.id,
                     startOffset = progress.duration
                 )
-            ).body()
+            ).body()!! // TODO deal with nullability?
             do {
                 streamProps.value?.let {
                     streamStatus.value =
-                        client.heartbeatStream(streamId = it.id).body()
+                        client.heartbeatStream(streamId = it.id).body()!! // TODO deal with nullability?
                     delay(
                         when (streamStatus.value) {
                             StreamStatus.available -> 15.seconds
@@ -141,7 +141,7 @@ class MainViewModel(
     fun loadLibraries() {
         Log.i("LibraryLoader", "Lodaing Libs")
         this.viewModelScope.launch {
-            libraries.value = client.listLibraries().body()
+            libraries.value = client.listLibraries().body()!! // TODO deal with nullability?
             Log.i("LibraryLoader", "Loaded ${libraries.value}")
 
         }
@@ -150,21 +150,21 @@ class MainViewModel(
     val shows = MutableLiveData<List<ShowInfo>>(emptyList<ShowInfo>())
     fun loadShows(libraryName: String) {
         this.viewModelScope.launch {
-            shows.value = client.listShows(libraryName).body()
+            shows.value = client.listShows(libraryName).body()!! // TODO deal with nullability?
         }
     }
 
     val seasons = MutableLiveData<List<SeasonInfo>>(emptyList<SeasonInfo>())
     fun loadSeasons(showId: String) {
         this.viewModelScope.launch {
-            seasons.value = client.listSeasons(showId).body()
+            seasons.value = client.listSeasons(showId).body()!! // TODO deal with nullability?
         }
     }
 
     val episodes = MutableLiveData<List<EpisodeInfo>>(emptyList<EpisodeInfo>())
     fun loadEpisodes(seasonId: String) {
         this.viewModelScope.launch {
-            episodes.value = client.listEpisodes(seasonId).body()
+            episodes.value = client.listEpisodes(seasonId).body()!! // TODO deal with nullability?
         }
     }
 
